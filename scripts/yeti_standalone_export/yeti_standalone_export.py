@@ -1,10 +1,10 @@
 """
 Yeti standalone Cache Exporter
-Version: 1.5
+Version: 1.7
 """
 
 
-__version__ = "1.5"
+__version__ = "1.7"
 
 import re
 import os
@@ -97,18 +97,37 @@ class YetiCacheExporter:
         return True
 
 
-    def _get_root_path(self, path):
-        parts = path.replace("//","/").split("/")
+    def _get_root_path(self, scene_file_path):
+        """
+        씬 파일 경로에서 회사 파이프라인 기준에 맞춰 프로젝트의 Root 경로를 추론합니다.
+        경로 패턴: [PROJECT_ROOT]/[TASK]/[pub 또는 dev]/maya/[SCENE_FILE].ma
+        반환값: [PROJECT_ROOT]/[TASK]
+        """
+        # 경로를 표준화하고 '/'로 분리합니다.
+        normalized_path = os.path.normpath(scene_file_path).replace("\\", "/")
+        parts = normalized_path.split('/')
 
-        root_path = "/".join(parts[:9])
-        '''
-        if "hair" in parts:
-            hair_index = parts.index("hair")
-            root_path = "/".join(parts[:hair_index + 1])
-        else:
-            root_path = os.path.dirname(path)
-        '''
-        return root_path
+        # 'maya' 폴더를 찾고 그 앞의 'pub' 또는 'dev'를 찾습니다.
+        maya_index = -1
+        try:
+            maya_index = parts.index('maya')
+        except ValueError:
+            # 'maya' 폴더를 찾을 수 없는 경우
+            cmds.warning(f"경로에서 'maya' 폴더를 찾을 수 없습니다: {scene_file_path}")
+            return os.path.dirname(scene_file_path)
+
+
+        if maya_index >= 2: # 'maya' 앞에 최소 'env'와 'task'가 있어야 함
+            env_dir = parts[maya_index - 1] # 'pub' or 'dev'
+            
+            if env_dir in ['pub', 'dev']:
+                # PROJECT_ROOT / TASK 까지의 경로를 조합
+                return "/".join(parts[:maya_index - 1]) # 'env_dir'와 'maya' 디렉토리를 제외
+            else:
+                cmds.warning(f"예상되는 환경 폴더 ('pub' 또는 'dev')를 찾을 수 없습니다: {scene_file_path}")
+                
+        # 패턴에 맞지 않으면 씬 파일의 상위 디렉토리를 반환합니다.
+        return os.path.dirname(scene_file_path)
 
     def _get_scene_version(self, path):
         """씬 파일 이름에서 _v 패턴 추출"""
