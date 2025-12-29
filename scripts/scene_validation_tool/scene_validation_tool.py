@@ -136,21 +136,6 @@ class SceneValidatorCore:
         cmds.select(cl=True)
         return list(set(errors))
 
-    def check_reference_paths(self):
-        """
-        [검증] 레퍼런스 경로
-        - 절대 경로(Absolute Path)로 설정된 레퍼런스가 있는지 검사합니다.
-          파이프라인에서는 보통 프로젝트 상대 경로 사용을 권장합니다.
-        
-        :return: 절대 경로로 설정된 레퍼런스 파일 경로 리스트
-        :rtype: list
-        """
-        bad_paths = []
-        refs = cmds.file(q=True, reference=True) or []
-        for ref in refs:
-            if os.path.isabs(ref):
-                bad_paths.append(ref)
-        return bad_paths
 
     def cleanup_unknown_nodes(self):
         """
@@ -257,27 +242,68 @@ class SceneValidatorCore:
     def check_uv_overlapping(self, nodes):
         """
         [검증] UV 겹침 (Overlapping)
-        - 0-1 공간 밖의 UV는 검사하지 않고, 겹치는 UV 컴포넌트만 찾습니다.
+        - 오브젝트의 모든 페이스를 선택한 후, 그 안에서 UV 겹침을 검사합니다.
+        - cmds.polyUVOverlap 명령어를 사용합니다.
 
         :param nodes: 검사할 트랜스폼 노드 리스트
-        :return: UV가 겹치는 컴포넌트 리스트
+        :return: UV가 겹치는 오브젝트의 노드 이름과 상세 정보 리스트
         :rtype: list
         """
-        overlap_results = []
-        for node in nodes:
-            shapes = cmds.listRelatives(node, shapes=True, fullPath=True, type='mesh') or []
-            if not shapes: continue
-            mesh_node = shapes[0]
-            
-            # polyUVOverlap 쿼리는 선택된 상태에서만 동작합니다.
-            cmds.select(mesh_node, r=True)
-            over_check = cmds.polyUVOverlap(oc=True)
-            if over_check:
-                # 결과가 있으면 컴포넌트 리스트를 추가합니다.
-                overlap_results.extend(over_check)
+        nodes_with_overlap = []
         
-        cmds.select(cl=True)
-        return list(set(overlap_results))
+        # 기존 선택 상태를 저장해두었다가 나중에 복원합니다.
+        original_selection = cmds.ls(sl=True) or []
+
+        try:
+            # 1. 노드를 하나씩 순회하며 검사합니다.
+            for node in nodes:
+                # 2. 노드에 해당하는 모든 페이스(face) 컴포넌트 이름을 만듭니다.
+                faces = f'{node}.f[*]'
+                
+                # 페이스 컴포넌트가 실제로 존재하는지 확인합니다. (오브젝트가 없거나, 메쉬가 아닌 경우 등)
+                if not cmds.objExists(faces): 
+                    continue
+
+                # 3. 해당 오브젝트의 모든 페이스를 선택합니다.
+                cmds.select(faces, r=True, noExpand=True) # noExpand는 많은 컴포넌트 선택 시 성능에 도움을 줄 수 있습니다.
+                
+                # 4. 선택된 페이스들을 대상으로 겹치는 UV가 있는지 확인합니다.
+                overlapping_components = cmds.polyUVOverlap(oc=True)
+                
+                # 5. 겹치는 UV가 발견되었는지 확인합니다.
+                if overlapping_components:
+                    num_overlapping_uvs = len(overlapping_components)
+                    # 결과를 노드 이름과 함께 UI에 친화적인 형태로 추가합니다.
+                    nodes_with_overlap.append(f"{node} ({num_overlapping_uvs} overlapping UVs)")
+
+        finally:
+            # 6. 검사 후 원래 선택 상태로 복원합니다.
+            if original_selection:
+                cmds.select(original_selection, r=True)
+            else:
+                cmds.select(cl=True)
+                
+        return list(set(nodes_with_overlap))
+
+    def fix_naming_conventions(self, nodes):
+        """
+        [수정] 네이밍 규칙 수정
+        - 노드 이름이 설정된 접미사로 끝나지 않는 경우 접미사를 추가합니다.
+
+        :param nodes: 수정할 트랜스폼 노드 리스트
+        """
+        if not nodes: return
+        cmds.undoInfo(openChunk=True, chunkName="FixNamingConventions")
+        try:
+            for node in nodes:
+                if not cmds.objExists(node): continue
+                name_only = node.split('|')[-1]
+                if not name_only.endswith(self.mesh_suffix):
+                    new_name = name_only + self.mesh_suffix
+                    cmds.rename(node, new_name)
+                    print(f"Renamed {name_only} to {new_name}")
+        finally:
+            cmds.undoInfo(closeChunk=True)
 
     def cleanup_uvsets(self, nodes):
         """
