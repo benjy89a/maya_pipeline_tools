@@ -3,7 +3,12 @@
 from PySide2 import QtWidgets, QtCore, QtGui # PySide2 UI 모듈 임포트
 from maya.app.general.mayaMixin import MayaQWidgetDockableMixin # Maya 도킹 가능한 위젯 믹스인 임포트
 import maya.cmds as cmds # Maya 커맨드 모듈 임포트
+import os # os 모듈 임포트
+import subprocess # subprocess 모듈 임포트
+import platform # platform 모듈 임포트
 from . import scene_validation_tool # 씬 검사 로직 코어 모듈 임포트
+import importlib # importlib 임포트
+importlib.reload(scene_validation_tool) # 코어 모듈 리로드
 
 
 class SceneValidatorUI(MayaQWidgetDockableMixin, QtWidgets.QWidget):
@@ -46,7 +51,17 @@ class SceneValidatorUI(MayaQWidgetDockableMixin, QtWidgets.QWidget):
             QPushButton { background-color: #5A98D1; color: white; font-weight: bold; border-radius: 5px; }
             QPushButton:hover { background-color: #6BADF5; }
         """) # 버튼의 스타일시트를 설정합니다.
+        
+        # '로그 파일 열기' 버튼 추가
+        self.btn_open_log = QtWidgets.QPushButton("Open Log File")
+        self.btn_open_log.setFixedHeight(40)
+        self.btn_open_log.setStyleSheet("""
+            QPushButton { background-color: #6c757d; color: white; border-radius: 5px; }
+            QPushButton:hover { background-color: #828a91; }
+        """)
+
         top_btn_layout.addWidget(self.btn_check) # 버튼을 상단 레이아웃에 추가합니다.
+        top_btn_layout.addWidget(self.btn_open_log) # 버튼을 상단 레이아웃에 추가합니다.
         layout.addLayout(top_btn_layout) # 상단 버튼 레이아웃을 메인 레이아웃에 추가합니다.
 
         # 2. 결과 및 로그 표시를 위한 스플리터
@@ -99,6 +114,7 @@ class SceneValidatorUI(MayaQWidgetDockableMixin, QtWidgets.QWidget):
 
         # 시그널-슬롯 연결
         self.btn_check.clicked.connect(self.run_full_check) # '씬 검사' 버튼 클릭 시 run_full_check 함수를 실행합니다.
+        self.btn_open_log.clicked.connect(self.open_log_file) # '로그 파일 열기' 버튼 클릭 시 open_log_file 함수를 실행합니다.
         self.btn_fix_selected.clicked.connect(self.run_fix_selected) # '선택 항목 수정' 버튼 클릭 시 run_fix_selected 함수를 실행합니다.
         self.btn_fix_all.clicked.connect(self.run_fix_all) # '전체 수정' 버튼 클릭 시 run_fix_all 함수를 실행합니다.
         self.result_list.itemSelectionChanged.connect(self.sync_selection_to_maya) # 리스트의 선택이 변경되면 Maya 씬의 선택과 동기화합니다.
@@ -129,30 +145,40 @@ class SceneValidatorUI(MayaQWidgetDockableMixin, QtWidgets.QWidget):
 
     def run_full_check(self):
         """
-        씬의 모든 항목에 대한 검사를 수행하고, 문제 항목 리스트와 검사 내역 로그를 모두 업데이트합니다.
+        씬의 모든 항목에 대한 검사를 수행하고, 문제 항목과 검사 내역을 UI에 표시합니다.
+        모든 검사가 끝난 후, 발견된 모든 문제점을 요약하여 로그 파일에 한 번에 기록합니다.
         """
-        self.result_list.clear() # 이전 문제 항목 결과를 리스트에서 삭제합니다.
-        self.log_list.clear() # 이전 검사 내역 로그를 리스트에서 삭제합니다.
+        self.result_list.clear()
+        self.log_list.clear()
+        
+        logger = self.core.log
+        logger.info("="*20 + " Starting New Scene Validation " + "="*20)
 
-        # 1. 알 수 없는 노드(Unknown Node) 검사
-        unknown_nodes = cmds.ls(type='unknown') # 씬에서 'unknown' 타입의 모든 노드를 찾습니다.
-        if unknown_nodes: # 알 수 없는 노드가 존재하면
-            self.add_log_entry(f"• 알 수 없는 노드 검사... 실패 ({len(unknown_nodes)}개)", passed=False) # 로그에 실패로 기록합니다.
-            self.add_selection_header("--- Unknown Nodes ---") # 문제 항목 리스트에 헤더를 추가합니다.
-            for node in unknown_nodes: # 각 노드에 대해
-                self.result_list.addItem(node) # 문제 항목 리스트에 추가합니다.
-        else: # 알 수 없는 노드가 없으면
-            self.add_log_entry("• 알 수 없는 노드 검사... 통과", passed=True) # 로그에 통과로 기록합니다.
+        # UI에 표시될 문제 아이템들을 임시 저장
+        all_found_items = {}
 
-        # 2. 메시(Mesh) 관련 검사
-        targets = self.core.get_all_mesh_transforms() # 씬에 있는 모든 메시의 트랜스폼 노드를 가져옵니다.
-        if not targets: # 검사할 메시가 없으면
-            self.add_log_entry("• 메시 관련 검사... 대상 없음", passed=True) # 로그에 대상이 없다고 기록합니다.
-            if not unknown_nodes: # 알 수 없는 노드도 없을 경우에만
-                self.result_list.addItem("검사할 대상(Mesh)이 없습니다.") # 문제 항목 리스트에 메시지를 표시합니다.
-            return # 함수 실행을 종료합니다.
+        # --- 1. 수집 단계 (Aggregation Phase) ---
+        
+        # 1-1. 알 수 없는 노드(Unknown Node) 검사
+        unknown_nodes = cmds.ls(type='unknown')
+        if unknown_nodes:
+            self.add_log_entry(f"• 알 수 없는 노드 검사... 실패 ({len(unknown_nodes)}개)", passed=False)
+            all_found_items["--- Unknown Nodes ---"] = unknown_nodes
+        else:
+            self.add_log_entry("• 알 수 없는 노드 검사... 통과", passed=True)
 
-        # 실행할 검사 목록을 데이터 기반으로 정의합니다.
+        # 1-2. 메시(Mesh) 관련 검사
+        targets = self.core.get_all_mesh_transforms()
+        if not targets:
+            self.add_log_entry("• 메시 관련 검사... 대상 없음", passed=True)
+            if not unknown_nodes:
+                self.result_list.addItem("검사할 대상(Mesh)이 없습니다.")
+            # 로그 파일에 요약 기록 후 종료
+            logger.info("Validation finished: No meshes found to check.")
+            logger.info("="*20 + " Scene Validation Finished " + "="*20 + "\n")
+            return
+
+        # 실행할 검사 목록 정의
         checks_to_run = [
             {"name": "이름 규칙", "header": "--- Naming Issues ---", "func": self.core.check_naming_conventions},
             {"name": "히스토리", "header": "--- Histroy Detected ---", "func": self.core.check_history},
@@ -163,20 +189,37 @@ class SceneValidatorUI(MayaQWidgetDockableMixin, QtWidgets.QWidget):
             {"name": "UV 할당 에러", "header": "--- UV Errors (Missing, Unassigned) ---", "func": self.core.check_uv_errors},
         ]
 
-        # 정의된 검사 목록을 순회하며 실행합니다.
+        # 정의된 검사들을 순회하며 에러 수집
         for check in checks_to_run:
-            errors = check["func"](targets) # 검사 함수를 실행하여 에러 목록을 받습니다.
-            if errors: # 에러가 있으면
-                self.add_log_entry(f"• {check['name']} 검사... 실패 ({len(errors)}개)", passed=False) # 로그에 실패로 기록합니다.
-                self.add_selection_header(check["header"]) # 문제 항목 리스트에 헤더를 추가합니다.
-                for e in errors: # 각 에러에 대해
-                    self.result_list.addItem(e) # 문제 항목 리스트에 추가합니다.
-            else: # 에러가 없으면
-                self.add_log_entry(f"• {check['name']} 검사... 통과", passed=True) # 로그에 통과로 기록합니다.
+            errors = check["func"](targets)
+            if errors:
+                self.add_log_entry(f"• {check['name']} 검사... 실패 ({len(errors)}개)", passed=False)
+                all_found_items[check["header"]] = errors
+            else:
+                self.add_log_entry(f"• {check['name']} 검사... 통과", passed=True)
 
-        # 검사 결과 아무런 문제가 없으면 메시지를 표시합니다.
-        if self.result_list.count() == 0: # 문제 항목 리스트에 아무것도 없으면
-            self.result_list.addItem("모든 검사를 통과했습니다.") # 통과 메시지를 추가합니다.
+        # --- 2. UI 채우기 단계 (UI Population Phase) ---
+
+        if not all_found_items:
+            self.result_list.addItem("모든 검사를 통과했습니다.")
+        else:
+            for header, items in all_found_items.items():
+                self.add_selection_header(header)
+                for item in items:
+                    self.result_list.addItem(item)
+        
+        # --- 3. 파일 로깅 단계 (File Logging Phase) ---
+        
+        if not all_found_items:
+            logger.info("All validation checks passed successfully.")
+        else:
+            logger.warning("Scene validation failed. Found the following issues:")
+            for header, items in all_found_items.items():
+                logger.warning(f"  {header} ({len(items)} found)")
+                for item in items:
+                    logger.warning(f"    - {item}")
+        
+        logger.info("="*20 + " Scene Validation Finished " + "="*20 + "\n")
 
     def sync_selection_to_maya(self):
         """
@@ -303,6 +346,26 @@ class SceneValidatorUI(MayaQWidgetDockableMixin, QtWidgets.QWidget):
 
         QtWidgets.QMessageBox.information(self, "완료", "모든 수정 가능한 항목에 대한 수정이 완료되었습니다.")
         self.run_full_check() # 씬을 다시 검사하여 결과를 갱신합니다.
+
+    def open_log_file(self):
+        """
+        코어에 정의된 로그 파일을 시스템 기본 편집기로 엽니다.
+        """
+        log_path = self.core.log_file_path
+        if not os.path.exists(log_path):
+            QtWidgets.QMessageBox.warning(self, "파일 없음", f"로그 파일을 찾을 수 없습니다:\n{log_path}")
+            return
+
+        system = platform.system()
+        try:
+            if system == "Windows":
+                os.startfile(log_path)
+            elif system == "Darwin": # macOS
+                subprocess.run(["open", log_path], check=True)
+            else: # Linux
+                subprocess.run(["xdg-open", log_path], check=True)
+        except Exception as e:
+            QtWidgets.QMessageBox.critical(self, "오류", f"로그 파일을 여는 데 실패했습니다:\n{e}")
 
 def main():
     """
