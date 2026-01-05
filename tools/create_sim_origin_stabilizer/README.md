@@ -1,32 +1,45 @@
-# 🛠️ Maya Sim Origin Stabilizer
+# Sim Origin Stabilizer
+> 대규모 씬에서 발생하는 좌표 오차(Jittering)를 해결하기 위해, 시뮬레이션 오브젝트를 가상의 원점으로 고정시켜주는 Maya 파이프라인 툴입니다.
 
-마야(Maya) 내 시뮬레이션 작업 시, 월드 좌표 오차로 인한 지터링(Jittering) 현상을 방지하기 위해 **객체를 원점(Origin)으로 역계산하여 고정**시켜주는 파이프라인 자동화 툴입니다.
+## 🎥 Demo
+![Sim Origin Stabilizer Demo](https://user-images.githubusercontent.com/12/248585408-900a12a1-59a6-470a-a111-a39f60e9092f.gif)
+*(이 툴은 UI가 없는 스크립트로, 위 GIF는 실행 후의 결과와 작동 방식을 보여줍니다.)*
 
-
-## 📌 Overview
-대규모 씬에서 캐릭터가 원점(0,0,0)에서 멀리 떨어져 있을 경우, 부동 소수점 연산 오류로 인해 nCloth나 가이드 커브 시뮬레이션이 불안정해지는 문제가 발생합니다. 이 스크립트는 **OpenMaya API 2.0**을 사용하여 복잡한 행렬 계산을 자동화하고 아티스트에게 안정적인 작업 환경을 제공합니다.
-
-## ✨ Key Features
-* **Matrix-based Alignment:** 기준 로케이터의 `Inclusive Matrix`를 역산(`Inverse`)하여 타겟을 정밀하게 원점에 배치합니다.
-* **Space Switch System:** `Set Driven Keyframe`을 통해 클릭 한 번으로 'World'와 'Origin' 공간을 자유롭게 전환할 수 있습니다.
-* **Non-Destructive Workflow:** 리깅 그룹 내에 원래의 월드 행렬 값을 보존(`originalWorldMatrix` 속성)하여 데이터 유실을 방지합니다.
-* **Validation Check:** 타겟의 트랜스폼 값이 Frozen 상태인지 자동 체크하여 오프셋 발생 가능성을 사전에 경고합니다.
+## ✨ Features
+- **정확한 원점 정렬**: `maya.api.OpenMaya`를 사용하여 기준 로케이터의 월드 매트릭스를 역연산(`Inverse Matrix`)하고, 타겟 오브젝트를 월드 원점(0,0,0)에 정밀하게 배치합니다.
+- **원클릭 공간 변환 (Space Switch)**: `Set Driven Key`를 이용하여 `World` 공간(원본 위치)과 `Origin` 공간(시뮬레이션용 원점 위치)을 속성(Attribute) 슬라이더로 손쉽게 전환할 수 있는 시스템을 자동으로 구축합니다.
+- **비파괴적 워크플로우**: 원본 월드 매트릭스 정보를 별도의 노드(`originalWorldMatrix` 속성)에 안전하게 보관하여, 언제든지 원본 상태로 복원할 수 있습니다.
+- **사전 유효성 검사**: 타겟 오브젝트의 `Transform` 값이 Freeze 상태인지 자동으로 확인하여, 이중 변환으로 인한 예기치 않은 오프셋 발생을 사전에 방지하고 사용자에게 경고합니다.
 
 ## 🛠 Tech Stack
-* **Language:** Python 3
-* **Libraries:** `maya.cmds`, `maya.api.OpenMaya` (API 2.0)
-* **Concepts:** Inverse Matrix, World Space Transformation, SDK(Set Driven Keyframe)
+- **Python**: 메인 프로그래밍 언어
+- **Maya API**: `maya.cmds` 및 `maya.api.OpenMaya` (정밀한 행렬 계산용)
+- **Rigging Concepts**: Inverse Matrix, World Space Transformation, Set Driven Key (SDK)
 
+## 🚀 Setup & Usage
+1.  **설치**: `create_sim_origin_stabilizer.py` 파일을 Maya 스크립트 경로에 등록된 폴더 (예: `maya/scripts`)에 배치합니다.
+2.  **실행**: Maya의 스크립트 에디터(Python 탭)에서 아래 코드를 실행합니다.
 
-## 🚀 Usage
-
-### 1. Installation
-`scripts` 폴더에 해당 파이썬 파일을 위치시킨 후 마야 내 스크립트 에디터에서 아래와 같이 호출합니다.
-
-### 2. Run Script
 ```python
-import sim_origin_stabilizer # 파일명에 맞춰 변경하세요
+from importlib import reload
+import create_sim_origin_stabilizer
 
-# loc_name: 기준이 될 로케이터 이름
-# sim_target: 시뮬레이션 대상 오브젝트 (선택 사항)
-sim_origin_stabilizer.create_sim_origin_stabilizer(loc_name='locator1', sim_target='char_mesh')
+# 개발 중에는 reload를 사용하여 최신 코드를 반영하는 것이 좋습니다.
+reload(create_sim_origin_stabilizer)
+
+# loc_name: 월드 공간의 기준점이 될 로케이터의 이름
+# sim_target: 원점으로 옮길 시뮬레이션 대상의 최상위 그룹 이름
+create_sim_origin_stabilizer.create_sim_origin_stabilizer(
+    loc_name='DRV_locator', 
+    sim_target='GRP_char'
+)
+```
+
+## 🧠 Problem Solving & Optimization
+- **문제 정의**: 대규모 씬에서 캐릭터가 월드 원점(0,0,0)에서 수 킬로미터 떨어져 있을 경우, 컴퓨터의 부동 소수점 정밀도 한계로 인해 좌표 연산에 미세한 오차가 누적됩니다. 이 오차는 nCloth, 헤어 시뮬레이션 등에서 심각한 **떨림(Jittering) 현상**을 유발하여 결과물의 품질을 저하시킵니다.
+
+- **해결 전략**: 전체 씬을 원점으로 옮기는 것은 비효율적이므로, 시뮬레이션에 필요한 오브젝트만 **"가상의 원점"**으로 가져오는 방법을 선택했습니다. 기준 로케이터를 캐릭터의 발밑에 두고, 이 로케이터의 월드 공간 변환 값을 역으로 적용하여 캐릭터 그룹 전체를 월드 원점으로 되돌리는 로직을 구현했습니다.
+- **기술적 구현**:
+    1.  **정밀한 행렬 연산**: 미세한 오차도 허용되지 않는 좌표 변환을 위해, 일반 `maya.cmds` 대신 `maya.api.OpenMaya`의 `MMatrix`를 사용했습니다. 이는 더 높은 정밀도를 보장하고 복잡한 행렬 연산(역행렬 계산 등)을 효율적으로 처리합니다.
+    2.  **자동화된 공간 전환 시스템**: 아티스트가 수동으로 좌표를 맞추는 대신, `Set Driven Key`를 사용하여 `space`라는 커스텀 속성을 만들었습니다. 이 속성 값을 0 또는 1로 조절하는 것만으로 'World'와 'Origin' 공간을 오갈 수 있어, 직관적이고 반복 작업에 용이한 워크플로우를 제공합니다.
+    3.  **데이터의 안정성**: 변환 과정에서 원본 위치 데이터가 소실될 위험을 방지하기 위해, 계산된 역행렬 값을 별도의 `transform` 노드 내 `originalWorldMatrix` 속성에 저장했습니다. 이는 언제든지 원본 상태로 100% 복원할 수 있음을 보장하는 비파괴적 설계의 핵심입니다.
