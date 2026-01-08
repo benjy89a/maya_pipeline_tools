@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+from functools import partial
 import maya.cmds as cmds
 
 def get_all_mesh_transforms():
@@ -66,3 +66,13 @@ def fix_history_and_transforms(nodes):
             cmds.makeIdentity(node, apply=True, translate=1, rotate=1, scale=1, normal=0)
     finally:
         cmds.undoInfo(closeChunk=True)
+
+def list_scripts_jobs():
+    for job in cmds.scriptJob(listJobs=True):
+        print(job.replace('\n',''))
+    
+def remove_script_job(name):
+    for job in cmds.scriptJob(listJobs=True):
+        buf = job.split(':')
+        if name in job:
+            cmds.evalDeferred(partial(cmds.scriptJob, kill=int(buf[0]), force=True),lowestPriority=True)

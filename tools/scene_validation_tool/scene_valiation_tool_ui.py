@@ -287,7 +287,7 @@ class SceneValidatorUI(MayaQWidgetDockableMixin, QtWidgets.QWidget):
 
         if run_unknown_node_cleanup: # 알 수 없는 노드 수정 플래그가 켜져 있으면
             removed = self.core.cleanup_unknown_nodes() # 모든 알 수 없는 노드를 삭제하는 함수를 실행합니다.
-            print(f"{len(removed)}개의 Unknown 노드를 삭제했습니다.") # 스크립트 에디터에 삭제된 노드 수를 출력합니다.
+            self.core.log.info(f"{len(removed)}개의 Unknown 노드를 삭제했습니다.") # 스크립트 에디터에 삭제된 노드 수를 출력합니다.
 
         for function, nodes in fixes_to_run.items(): # 실행할 수정 함수 목록을 순회합니다.
             clean_nodes = [n.split('(')[0].strip() for n in nodes] # 텍스트에서 순수 노드 이름만 추출합니다.

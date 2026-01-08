@@ -124,7 +124,7 @@ class SceneValidatorCore:
         deleted_nodes = maya_utils.delete_unknown_nodes()
         if deleted_nodes:
             self.log.info("%d개의 Unknown 노드를 삭제했습니다.", len(deleted_nodes))
-            self.log.info("삭제된 노드: %s", deleted_nodes)
+            self.log.debug("삭제된 노드 목록: %s", deleted_nodes)
         else:
             self.log.info("삭제할 Unknown 노드가 없습니다.")
         return deleted_nodes
@@ -262,21 +262,21 @@ class SceneValidatorCore:
                 uv_sets = cmds.polyUVSet(mesh, q=True, allUVSets=True) or []
                 
                 if len(uv_sets) > 1:
-                    self.log.info("'%s' 노드의 다중 UV 셋을 정리합니다.", clean_node)
+                    self.log.debug("'%s' 노드의 다중 UV 셋을 정리합니다.", clean_node)
                     if 'map1' in uv_sets:
                         for uv_set in uv_sets:
                             if uv_set != 'map1':
                                 cmds.polyUVSet(mesh, delete=True, uvSet=uv_set)
-                                self.log.info(" - '%s' UV 셋 삭제", uv_set)
+                                self.log.debug(" - '%s' 에서 '%s' UV 셋 삭제", clean_node, uv_set)
                     else:
                         cmds.polyUVSet(mesh, rename=True, newUVSet='map1', uvSet=uv_sets[0])
-                        self.log.info(" - '%s' -> 'map1' 이름 변경", uv_sets[0])
+                        self.log.debug(" - '%s' 에서 '%s' -> 'map1' 이름 변경", clean_node, uv_sets[0])
                         for uv_set in uv_sets[1:]:
                             cmds.polyUVSet(mesh, delete=True, uvSet=uv_set)
-                            self.log.info(" - '%s' UV 셋 삭제", uv_set)
+                            self.log.debug(" - '%s' 에서 '%s' UV 셋 삭제", clean_node, uv_set)
 
                 elif uv_sets and uv_sets[0] != 'map1':
-                    self.log.info("'%s' 노드의 UV 셋 이름을 'map1'으로 변경합니다.", clean_node)
+                    self.log.debug("'%s' 노드의 UV 셋 이름을 'map1'으로 변경합니다.", clean_node)
                     cmds.polyUVSet(mesh, rename=True, newUVSet='map1', uvSet=uv_sets[0])
             
             self.log.info("UV 셋 정리를 완료했습니다.")
