@@ -1,10 +1,6 @@
 # 씬 검수 툴 (Scene Validation Tool)
 > Maya 씬의 모델링 데이터 무결성을 검증하고 주요 문제들을 자동으로 수정하는 파이프라인 툴입니다.
 
-## 🎥 Demo
-![Demo GIF](https://example.com/path/to/your_scene_validation_tool_demo.gif)
-*(데모 GIF/이미지를 이곳에 삽입하세요)*
-
 ## ✨ 주요 기능 및 검사 항목
 
 ### 통합된 워크플로우
@@ -35,7 +31,7 @@
 
 ## 🚀 설치 및 사용법
 
-이 툴은 **Python 3를 지원하는 Maya (2022 이상 권장)** 에서 실행됩니다.
+이 툴은 **Python 3를 지원하는 Maya2024 권장** 에서 실행됩니다.
 
 1.  **설치**: `maya_pipeline_tools` 폴더를 Maya 스크립트 경로에 추가합니다. (`userSetup.py` 사용 권장)
 
