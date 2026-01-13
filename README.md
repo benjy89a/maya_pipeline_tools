@@ -31,6 +31,7 @@ This project includes various tools that support different stages of the Maya pi
 - **Language:** Python 3
 - **Main APIs:** `maya.cmds`, `maya.api.OpenMaya`
 - **핵심 원칙:**
+
   **Core Principles:**
     - UI 제작에는 `PySide2` 사용
 
@@ -45,6 +46,7 @@ This project includes various tools that support different stages of the Maya pi
 ## 🧠 아키텍처 및 문제 해결 (Architecture & Problem Solving)
 
 - **모듈화된 구조:**
+
   **Modular Structure:**
     - `core/`: Maya에 종속되지 않는 순수 Python 유틸리티 모듈 (e.g., 로깅, 파일 입출력)을 분리하여 재사용성을 극대화했습니다.
 
@@ -54,6 +56,7 @@ This project includes various tools that support different stages of the Maya pi
       Collects Maya-specific utility functions using `maya.cmds` or `om2` to efficiently manage common functionalities required across various tools.
 
 - **Maya API 활용 전략:**
+
   **Maya API Utilization Strategy:**
     - **`maya.cmds` 중심 접근:** 대부분의 씬 조작(객체 생성, 수정, 쿼리)은 간결하고 직관적인 `maya.cmds`를 사용하여 가독성과 유지보수성을 높였습니다.
 
@@ -64,6 +67,7 @@ This project includes various tools that support different stages of the Maya pi
       **Performance optimization with `OpenMaya`:** In specific situations where `maya.cmds` performance limitations are clear (e.g., large-scale vector/matrix operations, complex geometry data processing), `maya.api.OpenMaya` (om2) is used to optimize computational efficiency. This demonstrates an understanding of the API's pros and cons and the ability to choose the optimal tool for the situation.
 
 - **확장 가능한 툴셋:**
+
   **Extensible Toolset:**
     - 각 도구는 `tools/` 디렉터리 아래에 독립적인 패키지 형태로 구성되어 있어 새로운 기능을 추가하거나 기존 기능을 수정하기 용이합니다. 이러한 구조는 프로젝트가 커지더라도 체계적으로 관리할 수 있게 해줍니다.
 
