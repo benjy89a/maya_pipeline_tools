@@ -34,8 +34,13 @@ class PathParser:
             self.dcc = self.parts[-2] if len(self.parts) > 1 else None
         except IndexError:
             self.project = self.task = self.status = self.dcc = None
+        
 
         self.version = self._extract_version()
+        self.dirname = self.path.parent.as_posix()
+        self.work_root = self.dirname
+        self._set_work_root()
+        
 
     @classmethod
     def create(cls, path_string):
@@ -57,6 +62,15 @@ class PathParser:
         current_version = re.search(version_pattern, self.filename)
         return int(current_version.group(1)) if current_version else None
 
+    def _set_work_root(self):
+        """
+        작업하는 씬파일이 있는 폴더
+        """
+        if self.dcc in self.parts:
+            idx = list(self.parts).index(self.dcc)
+            self.work_root = pathlib.Path(*self.parts[:dix +1]).as_posix()
+            
+    
     def open_folder(self):
         """파일이 위치한 폴더를 운영체제별 탐색기에서 엽니다. (Windows는 파일 선택 상태)"""
         folder_path = self.path.parent
