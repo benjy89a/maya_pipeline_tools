@@ -24,6 +24,7 @@ class PathParser:
         self.filename = self.path.name
         self.stem = self.path.stem
         self.ext = self.path.suffix
+        self.dirpath = self.path.parent
 
         # 경로 구조 분석 (인덱스 기반)
         # 주의: 폴더 구조가 변경될 경우 아래 인덱스를 수정해야 합니다.
@@ -37,8 +38,9 @@ class PathParser:
         
 
         self.version = self._extract_version()
-        self.dirname = self.path.parent.as_posix()
-        self.work_root = self.dirname
+        self.base_name = self._extract_base_name()
+        
+        self.work_root = self.dirpath
         self._set_work_root()
         
 
@@ -61,6 +63,12 @@ class PathParser:
         version_pattern = r'_v(\d+)'
         current_version = re.search(version_pattern, self.filename)
         return int(current_version.group(1)) if current_version else None
+    
+    def _extract_base_name(self):
+        if self.version is None:
+            return self.stem
+        
+        return re.sub(r'_v\d+$', '', self.stem)
 
     def _set_work_root(self):
         """
@@ -68,7 +76,7 @@ class PathParser:
         """
         if self.dcc in self.parts:
             idx = list(self.parts).index(self.dcc)
-            self.work_root = pathlib.Path(*self.parts[:dix +1]).as_posix()
+            self.work_root = pathlib.Path(*self.parts[:idx +1]).as_posix()
             
     
     def open_folder(self):
